@@ -755,7 +755,7 @@ describe('modelOverrides', () => {
   })
 })
 
-describe('reasoning-dispatch compat switches', () => {
+describe('compat switches', () => {
   /** The materialized models of one route, keyed by id. */
   function modelsOf(providers: Record<string, LlmPiAi.PiAiProviderProfile>, route: string): Map<string, Model<Api>> {
     const models = resolveProfiles(providers).get(route)?.piProvider.getModels() ?? []
@@ -813,6 +813,23 @@ describe('reasoning-dispatch compat switches', () => {
     expect(models.get(responses.id)?.compat).toEqual(responses.compat)
   })
 
+  it('resolves the message-role switch on the same route-then-model path', () => {
+    const models = modelsOf({
+      'acme-gateway': {
+        api: 'openai-completions',
+        baseURL: 'https://acme.test',
+        compat: { supportsDeveloperRole: false },
+        models: [
+          { id: 'role-default', reasoningEfforts: { off: null, high: 'high' } },
+          { id: 'role-odd', compat: { supportsDeveloperRole: true } },
+        ],
+      },
+    }, 'acme-gateway')
+
+    expect(models.get('role-default')?.compat).toEqual({ supportsDeveloperRole: false })
+    expect(models.get('role-odd')?.compat).toEqual({ supportsDeveloperRole: true })
+  })
+
   it('rejects a model-level switch on a protocol that has no such field', () => {
     expect(() => resolveProfiles({
       anthropic: {
@@ -821,9 +838,25 @@ describe('reasoning-dispatch compat switches', () => {
     })).toThrow(/exist only on openai-completions/)
   })
 
+  it('rejects a model-level message-role switch on another protocol too', () => {
+    // Every switch is refused off `openai-completions`, not just the two
+    // reasoning ones the block started with.
+    expect(() => resolveProfiles({
+      anthropic: {
+        models: [{ id: 'claude-sonnet-4-5', compat: { supportsDeveloperRole: false } }],
+      },
+    })).toThrow(/exist only on openai-completions/)
+  })
+
   it('rejects route switches no model on the route can take', () => {
     expect(() => resolveProfiles({
       anthropic: { compat: { thinkingFormat: 'openai' } },
+    })).toThrow(/no model on the route speaks openai-completions/)
+  })
+
+  it('counts the message-role switch when refusing a route no model can take', () => {
+    expect(() => resolveProfiles({
+      anthropic: { compat: { supportsDeveloperRole: false } },
     })).toThrow(/no model on the route speaks openai-completions/)
   })
 })

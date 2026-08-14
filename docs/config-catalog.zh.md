@@ -940,10 +940,9 @@ export interface PiAiProviderProfile {
    */
   modelOverrides?: Record<string, PiAiModelOverride>
   /**
-   * Reasoning-dispatch switches for every `openai-completions` model on this
-   * route; each model's own `compat` overrides per field. What neither sets
-   * keeps the installed catalog entry's value, then pi-ai's baseURL-derived
-   * detection.
+   * Compat switches for every `openai-completions` model on this route; each
+   * model's own `compat` overrides per field. What neither sets keeps the
+   * installed catalog entry's value, then pi-ai's baseURL-derived detection.
    */
   compat?: PiAiCompatProfile
   /**
@@ -1024,7 +1023,7 @@ export interface PiAiModelProfile {
    * declares the offered levels and their wire spellings.
    */
   reasoningEfforts?: false | PiAiReasoningEfforts
-  /** Reasoning-dispatch switches for this model, winning over the route's. */
+  /** Compat switches for this model, winning over the route's. */
   compat?: PiAiCompatProfile
 }
 
@@ -1038,19 +1037,28 @@ export interface PiAiModelProfile {
 export type PiAiModelOverride = Omit<PiAiModelProfile, 'id'>
 
 /**
- * Reasoning-dispatch compatibility switches, set on the route (its models'
- * default) or per model (winning over the route). Only the switches pi-ai's
- * reasoning dispatch reads are offered; the rest of pi-ai's compat surface
- * keeps its baseURL-derived auto-detection. pi-ai types both fields only on
- * `OpenAICompletionsCompat` — the other wire protocols define their reasoning
- * fields in the protocol itself — so resolution rejects a model-level switch
- * anywhere else, while a route-level default skips past models it cannot fit.
+ * Compatibility switches for what a request carries, set on the route (its
+ * models' default) or per model (winning over the route). Offered because
+ * pi-ai infers each from the endpoint URL, which a private gateway's says
+ * nothing about; the rest of pi-ai's compat surface keeps that
+ * auto-detection. pi-ai types all three only on `OpenAICompletionsCompat` —
+ * the other wire protocols carry the same decisions in the protocol itself —
+ * so resolution rejects a model-level switch anywhere else, while a
+ * route-level default skips past models it cannot fit.
  */
 export interface PiAiCompatProfile {
   /** Reasoning parameter format the endpoint expects; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
   thinkingFormat?: PiAiThinkingFormat
   /** Whether the endpoint accepts `reasoning_effort`; absent keeps the catalog entry's, then pi-ai's baseURL-derived guess. */
   supportsReasoningEffort?: boolean
+  /**
+   * Whether the endpoint accepts the `developer` message role, which pi-ai
+   * sends system messages under for a reasoning model. `false` keeps them on
+   * `system`, which is what an OpenAI-compatible gateway fronting a backend
+   * that allows only `user`/`assistant` requires; absent keeps the catalog
+   * entry's value, then pi-ai's baseURL-derived guess.
+   */
+  supportsDeveloperRole?: boolean
 }
 
 /** One request modality a pi-ai model may accept. */

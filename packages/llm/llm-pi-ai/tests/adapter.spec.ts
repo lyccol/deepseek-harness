@@ -660,6 +660,76 @@ describe('provider profile lifecycle', () => {
     expect(server.requests[0]).not.toHaveProperty('reasoning_effort')
   })
 
+  it('sends the system prompt under the developer role pi-ai infers for a reasoning model', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          models: [{
+            id: 'acme-think',
+            contextWindow: 65_536,
+            maxTokens: 4096,
+            reasoningEfforts: { off: null, high: 'high' },
+          }],
+        },
+      },
+    })
+
+    // pi-ai derives `supportsDeveloperRole` from the endpoint URL, and an
+    // unknown host reads as an OpenAI-compatible one that takes the role.
+    await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-think',
+      system: 'be brief',
+      messages: [],
+    })
+    expect(server.requests[0]).toMatchObject({ messages: [{ role: 'developer', content: 'be brief' }] })
+  })
+
+  it('keeps the system prompt on the system role when the endpoint refuses developer', async () => {
+    vi.stubEnv('PI_TEST_KEY', 'test-key')
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'acme-gateway': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          compat: { supportsDeveloperRole: false },
+          models: [{
+            id: 'acme-think',
+            contextWindow: 65_536,
+            maxTokens: 4096,
+            reasoningEfforts: { off: null, high: 'high' },
+          }],
+        },
+      },
+    })
+
+    // Without the switch this route could not declare reasoning at all: a
+    // gateway whose backend allows only `user`/`assistant` rejects the whole
+    // request, not just the role.
+    await assemble(ctx, {
+      provider: 'acme-gateway',
+      model: 'acme-think',
+      reasoningEffort: ReasoningEffortId('high'),
+      system: 'be brief',
+      messages: [],
+    })
+    expect(server.requests[0]).toMatchObject({
+      messages: [{ role: 'system', content: 'be brief' }],
+      reasoning_effort: 'high',
+    })
+  })
+
   it('accepts absent credentials for pi-ai ambient authentication', async () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'ambient-key')
     const server = await mockServer([{ events: textEvents }])
